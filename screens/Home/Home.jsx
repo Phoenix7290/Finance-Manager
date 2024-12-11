@@ -137,7 +137,6 @@ export default function Home() {
     try {
       const { moeda, value } = newTransaction;
 
-      // Converte valor se não for BRL
       if (moeda !== "BRL") {
         const dateNow = new Date()
           .toISOString()
@@ -161,7 +160,6 @@ export default function Home() {
             });
           }
 
-          // Usa cotacaoCompra para conversão
           const valorConvertido = value * exchange.cotacaoCompra;
 
           return handleTransactionSave({
