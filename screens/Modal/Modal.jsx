@@ -33,7 +33,6 @@ export default function ModalForm({
   const [coins, setCoins] = useState([]);
   const [exchange, setExchange] = useState(null);
 
-  // Popula o formulário se estiver editando uma transação
   useEffect(() => {
     if (transactionEditing) {
       setDescription(transactionEditing.descricao || transactionEditing.description);
@@ -59,7 +58,6 @@ export default function ModalForm({
   }, []);
 
   const saveTransactions = async () => {
-    // Validações básicas
     if (!description || !value || !category) {
       Alert.alert('Erro', 'Por favor, preencha todos os campos');
       return;
@@ -78,12 +76,10 @@ export default function ModalForm({
 
       await addTransactions(newTransaction);
 
-      // Adiciona categoria se for nova
       if (adicionarCategoria && category && !avaliableCoins.includes(category)) {
         adicionarCategoria(category);
       }
 
-      // Limpa o formulário
       resetForm();
     } catch (error) {
       console.error('Erro ao salvar transação:', error);
