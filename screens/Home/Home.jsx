@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, Alert, TouchableOpacity, Dimensions } from 'react-native';
-import { listCoins, obterCotacao } from '../../api/exchange';
+import { listCoins, getExchange } from '../../api/exchange';
 import BotaoAdicionar from '../../components/Button/Button';
 import ModalTransacao from '../Modal/Modal';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -32,19 +32,11 @@ export default function Home() {
       const { width, height } = Dimensions.get('window');
       setIsPortrait(height >= width);
     };
-
-    Dimensions.addEventListener('change', updateLayout);
+  
+    const subscription = Dimensions.addEventListener('change', updateLayout);
     return () => {
-      Dimensions.removeEventListener('change', updateLayout);
+      subscription?.remove();
     };
-  }, []);
-
-  useEffect(() => {
-    async function loadCoins() {
-      const coins = await listCoins();
-      setAvaliableCoins(coins.map((coin) => coin.symbol));
-    }
-    loadCoins();
   }, []);
 
   const adicionarCategoria = (newCategory) => {
@@ -54,21 +46,53 @@ export default function Home() {
   };
 
   const addTransactions = async (newTransaction) => {
-    const { moeda, value } = newTransaction;
-    if (moeda !== 'BRL') {
-      const dateNow = new Date().toISOString().split('T')[0].split('-').reverse().join('-');
-      const exchange = await obterCotacao(moeda, dateNow);
-      if (!exchange) {
-        Alert.alert('Erro', `Não foi possível obter a cotação para a moeda ${moeda}.`);
-        return;
+    try {
+      const { moeda, value } = newTransaction;
+      
+      // Converte valor se não for BRL
+      if (moeda !== 'BRL') {
+        const dateNow = new Date().toISOString().split('T')[0].split('-').reverse().join('-');
+        
+        try {
+          const exchange = await getExchange(moeda, dateNow);
+          
+          if (!exchange || !exchange.exchangeSell) {
+            Alert.alert(
+              'Erro de Conversão', 
+              `Não foi possível obter a cotação para a moeda ${moeda}. Usando valor original.`
+            );
+            // Não converte se não encontrar cotação
+            return handleTransactionSave(newTransaction);
+          }
+  
+          // Converte o valor
+          newTransaction.value *= exchange.exchangeSell;
+        } catch (error) {
+          console.error('Erro na cotação:', error);
+          Alert.alert(
+            'Erro de Cotação', 
+            `Problema ao buscar cotação para ${moeda}. Usando valor original.`
+          );
+        }
       }
-      newTransaction.value *= exchange.exchangeSell;
+  
+      return handleTransactionSave(newTransaction);
+    } catch (error) {
+      console.error('Erro ao adicionar transação:', error);
+      Alert.alert('Erro', 'Não foi possível adicionar a transação');
     }
+  };
+  
+  const handleTransactionSave = (newTransaction) => {
+    // Verifica se está editando ou adicionando nova transação
     if (transactionEditing) {
-      setTransaction(transaction.map((t) => (t.id === transactionEditing.id ? newTransaction : t)));
+      setTransaction(transaction.map((t) => 
+        t.id === transactionEditing.id ? newTransaction : t
+      ));
     } else {
       setTransaction([...transaction, newTransaction]);
     }
+    
     setOpenModal(false);
     setTransacaoEditando(null);
   };

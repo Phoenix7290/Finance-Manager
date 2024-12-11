@@ -5,20 +5,23 @@ import {
   TextInput,
   Button,
   StyleSheet,
-  Picker,
   TouchableOpacity,
   Text,
   Platform,
   Switch,
+  Alert,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Picker } from '@react-native-picker/picker';
 import { listCurrency, getExchange } from '../../api';
 
 export default function ModalForm({
   visivel,
   fecharModal,
   addTransactions,
-  addCategory,
+  adicionarCategoria,
+  avaliableCoins,
+  transactionEditing,
 }) {
   const [description, setDescription] = useState('');
   const [value, setValue] = useState('');
@@ -27,57 +30,104 @@ export default function ModalForm({
   const [category, setCategory] = useState('');
   const [dateHour, setDateHour] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [coins, setcoins] = useState([]);
+  const [coins, setCoins] = useState([]);
   const [exchange, setExchange] = useState(null);
+
+  // Popula o formulário se estiver editando uma transação
+  useEffect(() => {
+    if (transactionEditing) {
+      setDescription(transactionEditing.descricao || transactionEditing.description);
+      setValue(transactionEditing.value.toString());
+      setCoin(transactionEditing.moeda || transactionEditing.coin);
+      setType(transactionEditing.tipo || transactionEditing.type);
+      setCategory(transactionEditing.categoria || transactionEditing.category);
+      setDateHour(new Date(transactionEditing.data || transactionEditing.dateHour));
+    }
+  }, [transactionEditing]);
 
   useEffect(() => {
     const loadCoins = async () => {
-      const moedasListadas = await listCurrency();
-      setcoins(moedasListadas);
+      try {
+        const moedasListadas = await listCurrency();
+        setCoins(moedasListadas);
+      } catch (error) {
+        console.error('Erro ao carregar moedas:', error);
+        Alert.alert('Erro', 'Não foi possível carregar as moedas');
+      }
     };
     loadCoins();
   }, []);
 
-  const saveTransactions = () => {
-    addTransactions({
-      id: Date.now(),
-      description,
-      value: parseFloat(value),
-      coin,
-      type,
-      category,
-      dateHour,
-    });
-    if (addCategory && category) {
-      addCategory(category);
+  const saveTransactions = async () => {
+    // Validações básicas
+    if (!description || !value || !category) {
+      Alert.alert('Erro', 'Por favor, preencha todos os campos');
+      return;
     }
+
+    try {
+      const newTransaction = {
+        id: transactionEditing ? transactionEditing.id : Date.now(),
+        descricao: description,
+        moeda: coin,
+        tipo: type,
+        value: parseFloat(value),
+        categoria: category,
+        data: dateHour.toISOString(),
+      };
+
+      await addTransactions(newTransaction);
+
+      // Adiciona categoria se for nova
+      if (adicionarCategoria && category && !avaliableCoins.includes(category)) {
+        adicionarCategoria(category);
+      }
+
+      // Limpa o formulário
+      resetForm();
+    } catch (error) {
+      console.error('Erro ao salvar transação:', error);
+      Alert.alert('Erro', 'Não foi possível salvar a transação');
+    }
+  };
+
+  const resetForm = () => {
     setDescription('');
     setValue('');
     setType('Receita');
     setCategory('');
     setDateHour(new Date());
     setExchange(null);
+    fecharModal();
   };
 
   const showDatePickerTime = () => {
     setShowDatePicker(true);
   };
 
-  const hideDateTimerPicker = () => {
-    setShowDatePicker(false);
-  };
-
   const aoAlterarDataHora = (_, selected) => {
     if (selected) {
       setDateHour(selected);
-      hideDateTimerPicker();
+      setShowDatePicker(false);
     }
   };
 
   const searchExchange = async () => {
-    const dateFormart = dateHour.toISOString().split('T')[0].split('-').reverse().join('-');
-    const resultExchange = await getExchange(coin, dateFormart);
-    setExchange(resultExchange ? resultExchange.exchangeBuy : 'Cotação indisponível');
+    try {
+      const dateFormat = dateHour.toISOString().split('T')[0].split('-').reverse().join('-');
+      const resultExchange = await getExchange(coin, dateFormat);
+      
+      if (resultExchange && resultExchange.exchangeBuy) {
+        setExchange(resultExchange.exchangeBuy);
+      } else {
+        Alert.alert('Aviso', 'Cotação indisponível');
+        setExchange(null);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar cotação:', error);
+      Alert.alert('Erro', 'Não foi possível buscar a cotação');
+      setExchange(null);
+    }
   };
 
   return (
@@ -116,9 +166,17 @@ export default function ModalForm({
               onChange={aoAlterarDataHora}
             />
           )}
-          <Picker selectedValue={coin} style={styles.picker} onValueChange={setCoin}>
+          <Picker 
+            selectedValue={coin} 
+            style={styles.picker} 
+            onValueChange={setCoin}
+          >
             {coins.map((item) => (
-              <Picker.Item key={item.simbolo} label={item.nomeFormatado} value={item.simbolo} />
+              <Picker.Item 
+                key={item.simbolo} 
+                label={item.nomeFormatado} 
+                value={item.simbolo} 
+              />
             ))}
           </Picker>
           <Button title="Buscar Cotação" onPress={searchExchange} />

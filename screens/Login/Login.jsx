@@ -11,10 +11,10 @@ export default function LoginScreen({ navigation }) {
       const { width, height } = Dimensions.get('window');
       setIsPortrait(height >= width);
     };
-
-    Dimensions.addEventListener('change', updateLayout);
+  
+    const subscription = Dimensions.addEventListener('change', updateLayout);
     return () => {
-      Dimensions.removeEventListener('change', updateLayout);
+      subscription?.remove();
     };
   }, []);
 
